@@ -86,6 +86,7 @@ Die Konfigurationsdatei wird mit `chmod 600` angelegt. Nach manuellen Änderunge
 | `EXPORT_API_PORT` | `8095` | TCP-Port des Addons (Paperless selbst nutzt Port `8000`) |
 | `EXPORT_API_KEY` | *(zufällig generiert)* | Geheimer Bearer-Token (mindestens 16 Zeichen erforderlich) |
 | `ALLOWED_EXPORT_DIRS` | `/opt/paperless/export` | Kommagetrennte Liste erlaubter Basisordner für `mode="local"` |
+| `TMPDIR` | `/var/tmp` | Temporäres Arbeitsverzeichnis auf der Disk statt RAM-`tmpfs` (`/tmp`) |
 | `PAPERLESS_SRC_DIR` | `/opt/paperless/src` | Pfad zum Verzeichnis mit `manage.py` |
 | `PAPERLESS_CONFIGURATION_PATH` | `/opt/paperless/paperless.conf` | Pfad zur Paperless-Konfigurationsdatei |
 | `CLEANUP_TTL_SECONDS` | `3600` | Aufbewahrungszeit (Sekunden) für erledigte Async-Jobs & Temp-ZIPs |

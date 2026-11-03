@@ -73,6 +73,9 @@ SRC_DIR = Path(os.environ.get("PAPERLESS_SRC_DIR", "/opt/paperless/src")).resolv
 CONF_PATH = Path(os.environ.get("PAPERLESS_CONFIGURATION_PATH", "/opt/paperless/paperless.conf"))
 CLEANUP_TTL = int(os.environ.get("CLEANUP_TTL_SECONDS", "3600"))
 CMD_TIMEOUT = int(os.environ.get("COMMAND_TIMEOUT_SECONDS", "1800"))
+TMP_WORK_DIR = Path(
+    os.environ.get("EXPORT_TMP_DIR") or os.environ.get("TMPDIR") or "/var/tmp"
+).resolve()
 MAX_BODY_BYTES = 65536
 
 RAW_ALLOWED_DIRS = os.environ.get("ALLOWED_EXPORT_DIRS", "/opt/paperless/export")
@@ -206,7 +209,12 @@ def execute_export_job(
     global ACTIVE_JOB_ID
     start_ts = time.monotonic()
     child_env = os.environ.copy()
-    child_env.setdefault("UV_CACHE_DIR", "/tmp/paperless-uv-cache")
+    # Erzwinge Festplatten-Temp (/var/tmp) statt RAM-tmpfs (/tmp unter Debian 13+),
+    # damit große ZIP-Exporte niemals RAM und Swap fluten.
+    child_env["TMPDIR"] = str(TMP_WORK_DIR)
+    child_env["TEMP"] = str(TMP_WORK_DIR)
+    child_env["TMP"] = str(TMP_WORK_DIR)
+    child_env.setdefault("UV_CACHE_DIR", str(TMP_WORK_DIR / "paperless-uv-cache"))
     if CONF_PATH.is_file():
         child_env.setdefault("PAPERLESS_CONFIGURATION_PATH", str(CONF_PATH))
 
@@ -309,11 +317,14 @@ class ExportAPIHandler(BaseHTTPRequestHandler):
 
     def send_json(self, status_code: int, payload: dict) -> None:
         raw = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
-        self.send_response(status_code)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(raw)))
-        self.end_headers()
-        self.wfile.write(raw)
+        try:
+            self.send_response(status_code)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+        except (BrokenPipeError, ConnectionResetError):
+            logger.warning("Client hat die Verbindung vor Empfang der JSON-Antwort geschlossen.")
 
     def check_auth(self) -> bool:
         if len(API_KEY) < 16:
@@ -478,7 +489,8 @@ class ExportAPIHandler(BaseHTTPRequestHandler):
         temp_dir: str | None = None
         try:
             if mode == "download":
-                temp_dir = tempfile.mkdtemp(prefix="paperless_export_")
+                TMP_WORK_DIR.mkdir(parents=True, exist_ok=True)
+                temp_dir = tempfile.mkdtemp(prefix="paperless_export_", dir=str(TMP_WORK_DIR))
                 target_dir = Path(temp_dir)
             else:
                 default_target = str(ALLOWED_ROOTS[0]) if ALLOWED_ROOTS else ""
@@ -568,6 +580,7 @@ def main() -> None:
         logger.warning("WARNUNG: EXPORT_API_KEY ist leer oder kürzer als 16 Zeichen!")
     logger.info("Starte Paperless Backup API auf %s:%d", HOST, PORT)
     logger.info("Erkannter Runner: %s (in %s)", " ".join(RUNNER_CMD), SRC_DIR)
+    logger.info("Temporäres Arbeitsverzeichnis (Disk): %s", TMP_WORK_DIR)
     logger.info("Erlaubte Export-Pfade: %s", [str(p) for p in ALLOWED_ROOTS])
 
     server = ThreadingHTTPServer((HOST, PORT), ExportAPIHandler)

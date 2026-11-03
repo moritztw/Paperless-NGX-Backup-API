@@ -161,12 +161,12 @@ if [ -n "${LOCAL_SCRIPT_DIR}" ] && [ -f "${LOCAL_SCRIPT_DIR}/paperless_export_ap
   echo "    Verwende lokale Datei aus ${LOCAL_SCRIPT_DIR}/paperless_export_api.py"
   cp "${LOCAL_SCRIPT_DIR}/paperless_export_api.py" "${TMP_PY}"
 else
-  echo "    Lade ${REPO_RAW_URL}/paperless_export_api.py herunter..."
-  curl -fsSL "${REPO_RAW_URL%/}/paperless_export_api.py" -o "${TMP_PY}"
+  echo "    Lade aktuelle ${REPO_RAW_URL}/paperless_export_api.py herunter..."
+  curl -fsSL "${REPO_RAW_URL%/}/paperless_export_api.py?cb=$(date +%s)" -o "${TMP_PY}"
 fi
 
 # Prüfe Python-Syntax vor dem Überschreiben einer bestehenden Installation
-python3 -m py_compile "${TMP_PY}"
+python3 -B -m py_compile "${TMP_PY}"
 install -m 0755 "${TMP_PY}" "${INSTALL_DIR}/paperless_export_api.py"
 chown "${DETECTED_USER}:${DETECTED_USER}" "${INSTALL_DIR}" "${INSTALL_DIR}/paperless_export_api.py" 2>/dev/null || true
 
@@ -175,6 +175,10 @@ GENERATED_NEW_KEY=false
 
 if [ -f "${ENV_FILE}" ] && [ "${RECONFIGURE}" = false ]; then
   echo "    Bestehende Konfiguration & API-Key in ${ENV_FILE} bleiben unverändert."
+  if ! grep -qE '^(TMPDIR|EXPORT_TMP_DIR)=' "${ENV_FILE}"; then
+    printf '\n# Festplatten-Temp statt RAM-tmpfs (verhindert Swap-Überlauf bei großen ZIPs)\nTMPDIR=/var/tmp\n' >> "${ENV_FILE}"
+    echo "    Ergänzt: TMPDIR=/var/tmp in ${ENV_FILE}"
+  fi
 else
   DEFAULT_PORT="${EXPORT_API_PORT:-8095}"
   DEFAULT_HOST="${EXPORT_API_HOST:-0.0.0.0}"
@@ -201,6 +205,9 @@ EXPORT_API_KEY=${KEY_VAL}
 
 # Kommagetrennte Whitelist erlaubter Zielverzeichnisse für mode="local"
 ALLOWED_EXPORT_DIRS=${DIRS_VAL}
+
+# Temporäres Arbeitsverzeichnis auf echter Festplatte statt RAM-tmpfs (/tmp)
+TMPDIR=/var/tmp
 
 # Paperless-NGX Pfade (community-scripts Standard)
 PAPERLESS_SRC_DIR=${PAPERLESS_SRC_DIR}
