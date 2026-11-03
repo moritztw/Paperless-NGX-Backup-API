@@ -1,0 +1,6 @@
+{
+  "name": "Paperless-NGX Exporter API Studio",
+  "description": "Konfigurator, Code-Generator und Live-Sandbox für ein schlankes Python-Addon zur Steuerung des Paperless-NGX document_exporter per REST-API aus n8n auf Proxmox LXC.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
