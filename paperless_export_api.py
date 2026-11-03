@@ -1,6 +1,18 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 moritztw and contributors
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 3 as
+# published by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
 """
-Paperless-NGX Document Exporter REST-API Addon
+Paperless-NGX Backup API (Document Exporter REST-API Addon)
+Repository: https://github.com/moritztw/Paperless-NGX-Backup-API
 Optimiert für Bare-Metal / Proxmox LXC Installationen (community-scripts).
 
 Eigenschaften:
@@ -290,7 +302,7 @@ def public_job_view(job: dict) -> dict:
 
 
 class ExportAPIHandler(BaseHTTPRequestHandler):
-    server_version = "PaperlessExportAPI/1.0"
+    server_version = "PaperlessBackupAPI/1.0"
 
     def log_message(self, fmt: str, *args) -> None:
         logger.info("%s - %s", self.address_string(), fmt % args)
@@ -554,7 +566,7 @@ class ExportAPIHandler(BaseHTTPRequestHandler):
 def main() -> None:
     if len(API_KEY) < 16:
         logger.warning("WARNUNG: EXPORT_API_KEY ist leer oder kürzer als 16 Zeichen!")
-    logger.info("Starte Paperless Export API auf %s:%d", HOST, PORT)
+    logger.info("Starte Paperless Backup API auf %s:%d", HOST, PORT)
     logger.info("Erkannter Runner: %s (in %s)", " ".join(RUNNER_CMD), SRC_DIR)
     logger.info("Erlaubte Export-Pfade: %s", [str(p) for p in ALLOWED_ROOTS])
 

@@ -1,4 +1,4 @@
-# Paperless-NGX Document Exporter REST-API (Bare-Metal / Proxmox LXC)
+# Paperless-NGX Backup API
 
 Ein schlankes, ressourcenarmes REST-API-Addon für **Paperless-NGX** auf Bare-Metal- und Proxmox-LXC-Installationen (insbesondere für Setups auf Basis der [Proxmox VE Helper-Scripts / community-scripts](https://community-scripts.org/scripts/paperless-ngx)).
 
@@ -6,16 +6,35 @@ Das Addon stellt den offiziellen [`document_exporter`](https://docs.paperless-ng
 
 ---
 
+## Schnellinstallation (1 Befehl)
+
+Führe diesen Befehl als `root` direkt in der Konsole deines **Paperless-NGX Servers / Proxmox LXC-Containers** aus (es muss nichts manuell vorab heruntergeladen oder geklont werden):
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/moritztw/Paperless-NGX-Backup-API/main/install.sh)"
+```
+
+* **Erstinstallation:** Fragt Port (`8095`) und erlaubte Backup-Pfade (`/opt/paperless/export`) interaktiv mit Standardwerten ab, lädt `paperless_export_api.py` direkt aus diesem Repository, generiert einen sicheren API-Key, richtet den `systemd`-Dienst ein und zeigt dir am Ende deinen fertigen Testbefehl an.
+* **Update / Neu konfigurieren / Deinstallieren:** Wenn du denselben Einzeiler später erneut ausführst, erkennt das Skript die bestehende Installation automatisch und bietet dir ein Auswahlmenü zum **Aktualisieren** (behält API-Key & Pfade bei), **Neu konfigurieren** oder **Deinstallieren** an.
+
+Für eine komplett unbeaufsichtigte Installation mit Standardwerten:
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/moritztw/Paperless-NGX-Backup-API/main/install.sh)" -- -y
+```
+
+---
+
 ## Haftungsausschluss & Nutzung auf eigene Verantwortung (Disclaimer)
 
 > [!WARNING]
-> **Bitte vor der Installation sorgfältig lesen:**
+> **Bitte vor der Installation und Nutzung sorgfältig lesen:**
 >
 > 1. **Kein offizielles Projekt:** Dieses Repository ist ein unabhängiges Community-Addon und steht in keiner offiziellen Verbindung zum Paperless-NGX-Projekt oder zu Proxmox Community Scripts.
-> 2. **Nutzung auf eigene Gefahr:** Die Bereitstellung erfolgt „wie besehen“ (*AS IS*) ohne jegliche ausdrückliche oder stillschweigende Gewährleistung (siehe [LICENSE](./LICENSE)). Jegliche Haftung für Datenverlust, beschädigte Archive, Systemausfälle oder Sicherheitsvorfälle ist ausgeschlossen.
-> 3. **Eigenverantwortung für Netzwerksicherheit:** Das Addon spricht nativ unverschlüsseltes HTTP für den Einsatz im geschützten lokalen Heim-/Servernetzwerk (LAN/VLAN/VPN). **Gib den Port niemals ungeschützt ins öffentliche Internet frei.** Wenn ein Zugriff über Netzwerkgrenzen hinweg nötig ist, liegt eine vorgeschaltete TLS-Verschlüsselung (Reverse Proxy wie Nginx, Caddy oder Traefik) sowie Firewall-Absicherung in deiner eigenen Verantwortung.
+> 2. **Nutzung auf eigene Gefahr & Verantwortung:** Die Bereitstellung dieses Programms erfolgt gemäß Abschnitt 15 und 16 der [GNU General Public License v3.0 (GPLv3)](./LICENSE) **ohne jegliche Gewährleistung** (*WITHOUT ANY WARRANTY*). Die Nutzung auf eigenen Servern geschieht vollständig auf eigenes Risiko. Jegliche Haftung der Autoren oder Mitwirkenden für Datenverlust, beschädigte Archive, Fehlkonfigurationen, Systemausfälle oder Sicherheitsvorfälle ist ausgeschlossen.
+> 3. **Eigenverantwortung für Netzwerksicherheit:** Das Addon spricht nativ unverschlüsseltes HTTP für den Einsatz im geschützten lokalen Heim-/Servernetzwerk (LAN/VLAN/VPN). **Gib den Port niemals ungeschützt ins öffentliche Internet frei.** Wenn ein Zugriff über Netzwerkgrenzen hinweg nötig ist, liegt eine vorgeschaltete TLS-Verschlüsselung (Reverse Proxy wie Nginx, Caddy oder Traefik) sowie eine geeignete Firewall-Absicherung allein in deiner Verantwortung.
 > 4. **Vorsicht bei Zielpfaden & `--delete`:** Die Option `"delete": true` (`--delete`) löscht im angegebenen Export-Zielverzeichnis alle Dateien, die nicht zum aktuellen Paperless-Bestand gehören. Gib in `ALLOWED_EXPORT_DIRS` ausschließlich dedizierte, leere Backup-Verzeichnisse frei – niemals Ordner mit anderen wichtigen Daten!
-> 5. **Backup-Verifizierung:** Prüfe regelmäßig selbst, ob deine erzeugten Exporte vollständig sind und sich im Ernstfall über den offiziellen `document_importer` wiederherstellen lassen.
+> 5. **Backup-Verifizierung:** Ein automatisierter Export ersetzt keine Prüfung. Überprüfe regelmäßig selbst, ob deine erzeugten Backups vollständig sind und sich im Ernstfall über den offiziellen `document_importer` wiederherstellen lassen.
 
 ---
 
@@ -26,7 +45,7 @@ Das Addon stellt den offiziellen [`document_exporter`](https://docs.paperless-ng
 >
 > Konzeption, Quellcode (`paperless_export_api.py`), Installations- und Deinstallationsskripte (`install.sh`, `uninstall.sh`) sowie diese Dokumentation wurden **mithilfe künstlicher Intelligenz (KI-gestützte Softwareentwicklung)** erstellt.
 >
-> Der gesamte Python-Code wurde bewusst frei von externen Abhängigkeiten in einer einzigen, klar strukturierten Datei (~420 Zeilen reine Python-3-Standardbibliothek) gehalten. Du bist ausdrücklich eingeladen – und im Sinne eines verantwortungsvollen Serverbetriebs dazu angehalten –, `paperless_export_api.py` und `install.sh` vor der Ausführung als `root` auf deinem System selbst durchzulesen und zu prüfen.
+> Der gesamte Python-Code wurde bewusst frei von externen Abhängigkeiten in einer einzigen, übersichtlichen Datei (~430 Zeilen reine Python-3-Standardbibliothek) gehalten. Jeder Nutzer sollte die Skripte (`install.sh` und `paperless_export_api.py`) vor der Ausführung als `root` auf produktiven Systemen eigenständig prüfen und nachvollziehen.
 
 ---
 
@@ -52,53 +71,8 @@ Das Addon stellt den offiziellen [`document_exporter`](https://docs.paperless-ng
 ## Voraussetzungen
 
 - Debian/Ubuntu-basierte Bare-Metal- oder Proxmox-LXC-Installation von **Paperless-NGX** (z. B. installiert über `community-scripts/paperless-ngx` unter `/opt/paperless`).
-- Vorhandenes `python3` und `systemd` (auf jedem Paperless-Server standardmäßig installiert).
+- Vorhandenes `python3`, `curl` und `systemd` (standardmäßig vorinstalliert).
 - `root`-Zugriff auf der Konsole des Paperless-Containers für die Einrichtung.
-
----
-
-## Installation auf dem Paperless-Server
-
-Öffne die Shell deines Paperless-LXC-Containers in Proxmox als `root` und führe folgende Befehle aus:
-
-```bash
-# 1. Repository klonen (URL an dein GitHub-Repository anpassen)
-git clone https://github.com/<DEIN-GITHUB-USER>/<DEIN-REPO-NAME>.git /opt/paperless-export-addon
-cd /opt/paperless-export-addon
-
-# 2. Installer ausführen (fragt Port & erlaubte Backup-Pfade interaktiv ab)
-bash install.sh
-```
-
-Alternativ ohne Rückfragen mit allen Standardwerten (Port `8095`, Zielordner `/opt/paperless/export` und automatisch generiertem kryptografischem API-Key):
-
-```bash
-bash install.sh -y
-```
-
-Am Ende der Installation gibt das Skript deinen **neu generierten Bearer API-Key** sowie einen fertigen `curl`-Testbefehl direkt auf der Konsole aus.
-
-### Aktualisieren & Neu konfigurieren
-
-```bash
-cd /opt/paperless-export-addon
-git pull
-
-# Aktualisiert den Python-Code, behält aber deinen API-Key & deine Pfade bei:
-bash install.sh
-
-# Optional: Port, Pfade und API-Key komplett neu anlegen:
-bash install.sh --reconfigure
-```
-
-### Deinstallation
-
-```bash
-cd /opt/paperless-export-addon
-bash uninstall.sh
-```
-
-*(Bestehende Export-/Backup-Verzeichnisse sowie deine Paperless-NGX-Installation werden dabei **nicht** angerührt.)*
 
 ---
 
@@ -117,7 +91,7 @@ Die Konfigurationsdatei wird mit `chmod 600` angelegt. Nach manuellen Änderunge
 | `CLEANUP_TTL_SECONDS` | `3600` | Aufbewahrungszeit (Sekunden) für erledigte Async-Jobs & Temp-ZIPs |
 | `COMMAND_TIMEOUT_SECONDS` | `1800` | Maximale Laufzeit (Sekunden) eines Export-Vorgangs |
 
-> **Tipp für Proxmox NAS-Mounts:** Wenn du ein NAS in deinen LXC gemountet hast (z. B. `/mnt/nas/paperless`), trage den Pfad kommagetrennt in `ALLOWED_EXPORT_DIRS=/opt/paperless/export,/mnt/nas/paperless` ein und stelle sicher, dass der Systemnutzer `paperless` Schreibrechte auf diesem Verzeichnis besitzt.
+> **Tipp für Proxmox NAS-Mounts:** Wenn du ein NAS in deinen LXC gemountet hast (z. B. `/mnt/nas/paperless`), gib den Pfad bei der Installation an oder trage ihn kommagetrennt in `ALLOWED_EXPORT_DIRS=/opt/paperless/export,/mnt/nas/paperless` ein und stelle sicher, dass der Systemnutzer `paperless` Schreibrechte auf diesem Verzeichnis besitzt.
 
 ---
 
@@ -224,7 +198,7 @@ Lädt nach Abschluss eines asynchronen Downloads (`"mode": "download", "async": 
      }
      ```
    - **Options -> Response -> Response Format:** `File` (Binary Property `data`)
-2. Direkt im nächsten Node steht das fertige Backup als Binärdatei `data` zur Weiterleitung in die Cloud bereit; auf dem Paperless-LXC ist die temporäre Datei bereits wieder aufgeräumt.
+2. Direkt im nächsten Node steht das fertige Backup als Binärdatei `data` zur Weiterleitung bereit; auf dem Paperless-LXC ist die temporäre Datei bereits wieder aufgeräumt.
 
 ### Variante C: Große Archive ohne Timeout-Risiko (Async + Polling)
 1. **HTTP Request (`POST /export`)** mit `"async": true` -> liefert sofort `job_id`.
@@ -236,9 +210,12 @@ Lädt nach Abschluss eines asynchronen Downloads (`"mode": "download", "async": 
 
 ---
 
-## Logs & Fehlerbehebung
+## Deinstallation & Logs
 
 ```bash
+# Direkt per Einzeiler deinstallieren (Paperless & Backups bleiben erhalten)
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/moritztw/Paperless-NGX-Backup-API/main/uninstall.sh)"
+
 # Dienststatus prüfen
 systemctl status paperless-export-api
 
@@ -246,15 +223,8 @@ systemctl status paperless-export-api
 journalctl -u paperless-export-api -f
 ```
 
-Typische HTTP-Statuscodes der API:
-- `200 OK` – Synchroner Export erfolgreich abgeschlossen (JSON oder ZIP-Stream).
-- `202 Accepted` – Async-Hintergrundjob gestartet (`job_id` im JSON).
-- `401 Unauthorized` – Fehlender oder falscher Bearer API-Key.
-- `403 Forbidden` – Angegebener `target_dir` liegt außerhalb von `ALLOWED_EXPORT_DIRS`.
-- `409 Conflict` – Es läuft bereits ein anderer Export-Vorgang.
-
 ---
 
 ## Lizenz
 
-Veröffentlicht unter der [MIT-Lizenz](./LICENSE). Nutzung auf eigene Verantwortung.
+Dieses Projekt ist unter der **[GNU General Public License v3.0 (GPLv3)](./LICENSE)** lizenziert.

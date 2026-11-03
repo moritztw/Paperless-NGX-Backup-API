@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 moritztw and contributors
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 3 as
+# published by the Free Software Foundation.
 # ==============================================================================
-# Deinstallation: Paperless-NGX Exporter API Addon
+# Deinstallation: Paperless-NGX Backup API
+# Direkt-Aufruf:
+#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/moritztw/Paperless-NGX-Backup-API/main/uninstall.sh)"
 # Bestehende Paperless-Daten und Export-Verzeichnisse werden NICHT gelöscht.
 # ==============================================================================
 set -euo pipefail
 
 if [ "${EUID:-$(id -u)}" -ne 0 ]; then
-  echo "FEHLER: Bitte als root ausführen (z. B. sudo bash uninstall.sh)."
+  echo "FEHLER: Bitte als root ausführen."
   exit 1
 fi
 

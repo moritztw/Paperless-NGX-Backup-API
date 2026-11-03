@@ -1,17 +1,29 @@
 #!/usr/bin/env bash
-# ==============================================================================
-# Installationsskript: Paperless-NGX Exporter API Addon
-# Zielsystem: Bare-Metal / Proxmox VE LXC (community-scripts/paperless-ngx)
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 moritztw and contributors
 #
-# Aufruf auf dem Paperless-Server (als root):
-#   bash install.sh              (interaktiv mit sinnvollen Standardwerten)
-#   bash install.sh -y           (automatisch mit Standardwerten)
-#   bash install.sh --reconfigure (Konfiguration / API-Key neu anlegen)
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 3 as
+# published by the Free Software Foundation.
+# ==============================================================================
+# Paperless-NGX Backup API – Direkt-Installer / Updater / Deinstaller
+# Repository: https://github.com/moritztw/Paperless-NGX-Backup-API
+#
+# Einzeiler-Installation direkt auf dem Paperless-NGX Server / Proxmox LXC:
+#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/moritztw/Paperless-NGX-Backup-API/main/install.sh)"
 # ==============================================================================
 set -euo pipefail
 
+REPO_RAW_URL="${REPO_RAW_URL:-https://raw.githubusercontent.com/moritztw/Paperless-NGX-Backup-API/main}"
+PAPERLESS_SRC_DIR="${PAPERLESS_SRC_DIR:-/opt/paperless/src}"
+PAPERLESS_CONF_PATH="${PAPERLESS_CONF_PATH:-/opt/paperless/paperless.conf}"
+INSTALL_DIR="/opt/paperless/export_api"
+ENV_FILE="/etc/paperless-export-api.env"
+SERVICE_FILE="/etc/systemd/system/paperless-export-api.service"
+
 AUTO_YES=false
 RECONFIGURE=false
+UNINSTALL_MODE=false
 
 for arg in "$@"; do
   case "$arg" in
@@ -21,100 +33,156 @@ for arg in "$@"; do
     --reconfigure)
       RECONFIGURE=true
       ;;
+    --uninstall)
+      UNINSTALL_MODE=true
+      ;;
     -h|--help)
-      echo "Verwendung: bash install.sh [-y|--yes] [--reconfigure]"
+      echo "Verwendung:"
+      echo "  bash -c \"\$(curl -fsSL ${REPO_RAW_URL}/install.sh)\""
+      echo "  Optionen: [-y|--yes] [--reconfigure] [--uninstall]"
       exit 0
       ;;
     *)
       echo "Unbekannte Option: $arg"
-      echo "Verwendung: bash install.sh [-y|--yes] [--reconfigure]"
       exit 1
       ;;
   esac
 done
 
 if [ "${EUID:-$(id -u)}" -ne 0 ]; then
-  echo "FEHLER: Bitte führe dieses Skript als root auf deinem Paperless-Server aus."
+  echo "FEHLER: Bitte führe diesen Befehl als root auf deinem Paperless-Server / LXC aus."
   exit 1
 fi
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SOURCE_PY="${SCRIPT_DIR}/paperless_export_api.py"
-RAW_BASE_URL="${RAW_BASE_URL:-}"
+# Hilfsfunktion für interaktive Eingaben (funktioniert bei bash -c "$(curl ...)" und curl | bash)
+prompt_input() {
+  local prompt_text="$1"
+  local default_val="$2"
+  local input_val=""
 
-PAPERLESS_SRC_DIR="${PAPERLESS_SRC_DIR:-/opt/paperless/src}"
-PAPERLESS_CONF_PATH="${PAPERLESS_CONF_PATH:-/opt/paperless/paperless.conf}"
-INSTALL_DIR="/opt/paperless/export_api"
-ENV_FILE="/etc/paperless-export-api.env"
-SERVICE_FILE="/etc/systemd/system/paperless-export-api.service"
+  if [ "${AUTO_YES}" = true ]; then
+    printf '%s' "${default_val}"
+    return
+  fi
+
+  if [ -t 0 ]; then
+    read -r -p "${prompt_text} [${default_val}]: " input_val
+  elif [ -t 1 ] && (: </dev/tty) 2>/dev/null; then
+    read -r -p "${prompt_text} [${default_val}]: " input_val </dev/tty
+  else
+    printf '%s' "${default_val}"
+    return
+  fi
+
+  printf '%s' "${input_val:-$default_val}"
+}
+
+run_uninstall() {
+  echo "==> Stoppe und deaktiviere paperless-export-api.service..."
+  systemctl disable --now paperless-export-api.service 2>/dev/null || true
+  rm -f "${SERVICE_FILE}"
+  systemctl daemon-reload
+
+  echo "==> Entferne Addon-Dateien und Konfiguration..."
+  rm -rf "${INSTALL_DIR}"
+  rm -f "${ENV_FILE}"
+
+  echo "==> Deinstallation abgeschlossen."
+  echo "    Deine Paperless-Installation und bestehenden Backup-Ordner wurden nicht verändert."
+  exit 0
+}
+
+if [ "${UNINSTALL_MODE}" = true ]; then
+  run_uninstall
+fi
+
+echo "=============================================================================="
+echo " Paperless-NGX Backup API – Setup (Bare-Metal / Proxmox LXC)"
+echo "=============================================================================="
+
+# Falls bereits installiert und interaktiv aufgerufen: Auswahlmenü anbieten
+if [ -f "${ENV_FILE}" ] && [ "${RECONFIGURE}" = false ] && [ "${AUTO_YES}" = false ]; then
+  if [ -t 0 ] || { [ -t 1 ] && (: </dev/tty) 2>/dev/null; }; then
+    echo "Bestehende Installation gefunden (${ENV_FILE})."
+    echo "  [1] Aktualisieren (neuesten Code laden, API-Key & Pfade behalten)"
+    echo "  [2] Neu konfigurieren (Port, Pfade & API-Key neu festlegen)"
+    echo "  [3] Deinstallieren (Addon entfernen, Backups behalten)"
+    echo "  [4] Abbrechen"
+    ACTION_CHOICE="$(prompt_input "Auswahl" "1")"
+    case "${ACTION_CHOICE}" in
+      1) RECONFIGURE=false ;;
+      2) RECONFIGURE=true ;;
+      3) run_uninstall ;;
+      4) echo "Abgebrochen."; exit 0 ;;
+      *) echo "Ungültige Auswahl."; exit 1 ;;
+    esac
+    echo ""
+  fi
+fi
 
 echo "==> 1/5 Prüfe Paperless-NGX Umgebung..."
 if [ ! -f "${PAPERLESS_SRC_DIR}/manage.py" ]; then
   echo "FEHLER: ${PAPERLESS_SRC_DIR}/manage.py wurde nicht gefunden."
-  echo "Falls Paperless in einem anderen Pfad liegt, starte mit:"
-  echo "  PAPERLESS_SRC_DIR=/dein/pfad/src bash install.sh"
+  echo "Falls Paperless in einem anderen Pfad installiert ist, setze PAPERLESS_SRC_DIR:"
+  echo "  PAPERLESS_SRC_DIR=/dein/pfad/src bash -c \"\$(curl -fsSL ${REPO_RAW_URL}/install.sh)\""
   exit 1
 fi
 
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "FEHLER: python3 wurde nicht gefunden."
-  exit 1
-fi
+for cmd in python3 curl systemctl; do
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "FEHLER: Benötigtes Systemwerkzeug '$cmd' wurde nicht gefunden."
+    exit 1
+  fi
+done
 
-# Ermittle den Systemnutzer des bestehenden Paperless-Dienstes
 DETECTED_USER="$(systemctl show -p User --value paperless-webserver.service 2>/dev/null || true)"
-if [ -z "$DETECTED_USER" ]; then
+if [ -z "${DETECTED_USER}" ]; then
   if id -u paperless >/dev/null 2>&1; then
     DETECTED_USER="paperless"
   else
     DETECTED_USER="root"
   fi
 fi
-echo "    Gefundenes Paperless-Verzeichnis: ${PAPERLESS_SRC_DIR}"
-echo "    Erkannter Service-Benutzer:       ${DETECTED_USER}"
+echo "    Paperless-Verzeichnis: ${PAPERLESS_SRC_DIR}"
+echo "    Service-Benutzer:      ${DETECTED_USER}"
 
-echo "==> 2/5 Installiere Python-Daemon nach ${INSTALL_DIR}..."
+echo "==> 2/5 Lade und prüfe paperless_export_api.py..."
 mkdir -p "${INSTALL_DIR}"
+TMP_PY="$(mktemp /tmp/paperless_export_api.XXXXXX.py)"
+trap 'rm -f "${TMP_PY}"' EXIT
 
-if [ -f "${SOURCE_PY}" ]; then
-  cp "${SOURCE_PY}" "${INSTALL_DIR}/paperless_export_api.py"
-elif [ -n "${RAW_BASE_URL}" ]; then
-  echo "    Lade paperless_export_api.py von ${RAW_BASE_URL}..."
-  curl -fsSL "${RAW_BASE_URL%/}/paperless_export_api.py" -o "${INSTALL_DIR}/paperless_export_api.py"
-else
-  echo "FEHLER: paperless_export_api.py wurde nicht im selben Ordner (${SCRIPT_DIR}) gefunden."
-  echo "Bitte klone das gesamte Repository auf den Server und führe 'bash install.sh' im Projektordner aus."
-  exit 1
+# Nutze lokale Datei nur, wenn das Skript direkt aus einem geklonten Ordner aufgerufen wurde
+LOCAL_SCRIPT_DIR=""
+if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
+  LOCAL_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 fi
 
-chmod 755 "${INSTALL_DIR}/paperless_export_api.py"
+if [ -n "${LOCAL_SCRIPT_DIR}" ] && [ -f "${LOCAL_SCRIPT_DIR}/paperless_export_api.py" ]; then
+  echo "    Verwende lokale Datei aus ${LOCAL_SCRIPT_DIR}/paperless_export_api.py"
+  cp "${LOCAL_SCRIPT_DIR}/paperless_export_api.py" "${TMP_PY}"
+else
+  echo "    Lade ${REPO_RAW_URL}/paperless_export_api.py herunter..."
+  curl -fsSL "${REPO_RAW_URL%/}/paperless_export_api.py" -o "${TMP_PY}"
+fi
+
+# Prüfe Python-Syntax vor dem Überschreiben einer bestehenden Installation
+python3 -m py_compile "${TMP_PY}"
+install -m 0755 "${TMP_PY}" "${INSTALL_DIR}/paperless_export_api.py"
 chown "${DETECTED_USER}:${DETECTED_USER}" "${INSTALL_DIR}" "${INSTALL_DIR}/paperless_export_api.py" 2>/dev/null || true
 
-echo "==> 3/5 Richte Konfiguration (${ENV_FILE}) ein..."
+echo "==> 3/5 Konfiguriere ${ENV_FILE}..."
 GENERATED_NEW_KEY=false
 
 if [ -f "${ENV_FILE}" ] && [ "${RECONFIGURE}" = false ]; then
-  echo "    Bestehende ${ENV_FILE} gefunden – Konfiguration & API-Key bleiben erhalten."
-  echo "    (Nutze 'bash install.sh --reconfigure', falls du Werte neu abfragen möchtest.)"
+  echo "    Bestehende Konfiguration & API-Key in ${ENV_FILE} bleiben unverändert."
 else
-  DEFAULT_HOST="${EXPORT_API_HOST:-0.0.0.0}"
   DEFAULT_PORT="${EXPORT_API_PORT:-8095}"
+  DEFAULT_HOST="${EXPORT_API_HOST:-0.0.0.0}"
   DEFAULT_DIRS="${ALLOWED_EXPORT_DIRS:-/opt/paperless/export}"
 
-  if [ "${AUTO_YES}" = false ] && [ -t 0 ]; then
-    read -r -p "    API-Port [${DEFAULT_PORT}]: " INPUT_PORT
-    PORT_VAL="${INPUT_PORT:-$DEFAULT_PORT}"
-
-    read -r -p "    Bind-Adresse (0.0.0.0 für LAN/n8n, 127.0.0.1 nur lokal) [${DEFAULT_HOST}]: " INPUT_HOST
-    HOST_VAL="${INPUT_HOST:-$DEFAULT_HOST}"
-
-    read -r -p "    Erlaubte Export-Zielpfade, kommagetrennt [${DEFAULT_DIRS}]: " INPUT_DIRS
-    DIRS_VAL="${INPUT_DIRS:-$DEFAULT_DIRS}"
-  else
-    PORT_VAL="${DEFAULT_PORT}"
-    HOST_VAL="${DEFAULT_HOST}"
-    DIRS_VAL="${DEFAULT_DIRS}"
-  fi
+  PORT_VAL="$(prompt_input "    API-Port" "${DEFAULT_PORT}")"
+  HOST_VAL="$(prompt_input "    Bind-Adresse (0.0.0.0 für LAN/n8n, 127.0.0.1 nur lokal)" "${DEFAULT_HOST}")"
+  DIRS_VAL="$(prompt_input "    Erlaubte Export-Zielpfade (kommagetrennt)" "${DEFAULT_DIRS}")"
 
   if [ -n "${EXPORT_API_KEY:-}" ]; then
     KEY_VAL="${EXPORT_API_KEY}"
@@ -124,7 +192,7 @@ else
   fi
 
   cat << EOF > "${ENV_FILE}"
-# Konfiguration für Paperless-NGX Exporter API Addon
+# Konfiguration für Paperless-NGX Backup API
 # Dateiberechtigung: chmod 600 (nur durch root lesbar, Übergabe via systemd)
 
 EXPORT_API_HOST=${HOST_VAL}
@@ -148,12 +216,11 @@ EOF
   chmod 600 "${ENV_FILE}"
 fi
 
-# Lese aktive Werte aus ENV_FILE für Ordneranlage und Abschlusstest
 ACTIVE_PORT="$(grep -E '^EXPORT_API_PORT=' "${ENV_FILE}" | cut -d= -f2- | tr -d ' "'"'" || echo "8095")"
 ACTIVE_DIRS="$(grep -E '^ALLOWED_EXPORT_DIRS=' "${ENV_FILE}" | cut -d= -f2- | tr -d '"'"'" || echo "/opt/paperless/export")"
 ACTIVE_KEY="$(grep -E '^EXPORT_API_KEY=' "${ENV_FILE}" | cut -d= -f2- | tr -d ' "'"'" || true)"
 
-echo "==> 4/5 Prüfe und erstelle freigegebene Export-Verzeichnisse..."
+echo "==> 4/5 Prüfe und erstelle erlaubte Export-Verzeichnisse..."
 IFS=',' read -r -a DIR_ARRAY <<< "${ACTIVE_DIRS}"
 for raw_dir in "${DIR_ARRAY[@]}"; do
   dir_trimmed="$(echo "${raw_dir}" | xargs)"
@@ -168,10 +235,10 @@ for raw_dir in "${DIR_ARRAY[@]}"; do
   fi
 done
 
-echo "==> 5/5 Richte systemd-Service ein und starte API..."
+echo "==> 5/5 Richte systemd-Service ein und starte Dienst..."
 cat << EOF > "${SERVICE_FILE}"
 [Unit]
-Description=Paperless-NGX Document Exporter REST API Addon
+Description=Paperless-NGX Backup API (Document Exporter REST Service)
 After=network.target paperless-webserver.service
 Wants=network.target
 
@@ -198,22 +265,22 @@ sleep 1
 SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 SERVER_IP="${SERVER_IP:-<DEINE-SERVER-IP>}"
 
-if command -v curl >/dev/null 2>&1 && curl -fsS "http://127.0.0.1:${ACTIVE_PORT}/health" >/dev/null; then
+if curl -fsS "http://127.0.0.1:${ACTIVE_PORT}/health" >/dev/null; then
   echo ""
   echo "=============================================================================="
-  echo " Paperless-NGX Exporter API erfolgreich installiert und aktiv!"
+  echo " Paperless-NGX Backup API ist aktiv!"
   echo "=============================================================================="
   echo " Health-Check:  http://${SERVER_IP}:${ACTIVE_PORT}/health"
   echo " Export-URL:    http://${SERVER_IP}:${ACTIVE_PORT}/export"
   echo " Konfiguration: ${ENV_FILE}"
   if [ "${GENERATED_NEW_KEY}" = true ]; then
     echo " Neuer API-Key: ${ACTIVE_KEY}"
-    echo " (Bitte sicher in deinem Passwortmanager / n8n-Credential speichern!)"
+    echo " (Bitte sicher für n8n kopieren!)"
   else
     echo " API-Key:       Unverändert aus ${ENV_FILE} übernommen"
   fi
   echo ""
-  echo " Schnelltest (z. B. von deinem n8n-Host aus):"
+  echo " Schnelltest (z. B. von deinem n8n-Server aus):"
   echo " curl -fsS -X POST \"http://${SERVER_IP}:${ACTIVE_PORT}/export\" \\"
   echo "   -H \"Authorization: Bearer ${ACTIVE_KEY}\" \\"
   echo "   -H \"Content-Type: application/json\" \\"
@@ -221,7 +288,7 @@ if command -v curl >/dev/null 2>&1 && curl -fsS "http://127.0.0.1:${ACTIVE_PORT}
   echo "=============================================================================="
 else
   echo ""
-  echo "WARNUNG: Der Dienst wurde eingerichtet, antwortet lokal aber noch nicht auf Port ${ACTIVE_PORT}."
-  echo "Prüfe die Logs mit: journalctl -u paperless-export-api -n 50 --no-pager"
+  echo "WARNUNG: Dienst antwortet lokal noch nicht auf Port ${ACTIVE_PORT}."
+  echo "Logs prüfen mit: journalctl -u paperless-export-api -n 50 --no-pager"
   exit 1
 fi

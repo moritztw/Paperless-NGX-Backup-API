@@ -1,8 +1,27 @@
-node_modules/
-build/
-dist/
-coverage/
-.DS_Store
+# Python Bytecode & Umgebungen
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# Lokale Geheimnisse & Konfigurationsdateien
+.env
+.env.*
+*.env
+
+# Temporäre Export-Archive & Logs
+*.zip
 *.log
-.env*
-!.env.example
+
+# Betriebssystem & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Lokale Build-/Umgebungsordner
+node_modules/
+dist/
+build/
+.aistudio/
